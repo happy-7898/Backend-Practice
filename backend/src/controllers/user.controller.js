@@ -135,8 +135,8 @@ const logoutUser=asyncHandler(async (req,res)=>{
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set:{
-                refreshToken:undefined
+            $unset:{
+                refreshToken:1
             }
         },
         {
@@ -183,18 +183,20 @@ const refreshAccessToken=asyncHandler(async (req,res)=>{
             secure:true
         }
     
-        const {accessToken,newRefreshToken}=await generateAccessAndRefreshToken(user._id);
+        const {accessToken,refreshToken}=await generateAccessAndRefreshToken(user._id);
+
+        
     
         return res
         .status(200)
         .cookie("accessToken",accessToken,options)
-        .cookie("refreshToken",newRefreshToken,options)
+        .cookie("refreshToken",refreshToken,options)
         .json(
             new ApiResponse(
                 200,
                 {
                     accessToken,
-                    refreshToken:newRefreshToken,
+                    refreshToken:refreshToken,
                     
                 },
                 "Access Token Refreshed"
@@ -211,7 +213,7 @@ const changeCurrentPassword=asyncHandler(async (req,res)=>{
 
     const user=await User.findById(req.user?._id);
 
-    const isPasswordCorrect=await User.isPasswordCorrect(oldPassword);
+    const isPasswordCorrect=await user.isPasswordCorrect(oldPassword);
 
     if(!isPasswordCorrect){
         throw new ApiError(400,"Invalid Old Password");
@@ -235,7 +237,7 @@ const updateAccountDetails=asyncHandler(async (req,res)=>{
         throw new ApiError(400,"All fields are required");
     }
 
-    const user=User.findByIdAndUpdate(
+    const user=await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set:{
@@ -326,7 +328,7 @@ const getUserChannelProfile=asyncHandler(async(req,res)=>{
         throw new ApiError(400,"Username is missing ")
     }
 
-    const channel=User.aggregate(
+    const channel=await User.aggregate(
         [
             {
                 $match:{
@@ -381,6 +383,8 @@ const getUserChannelProfile=asyncHandler(async(req,res)=>{
         ]
     )
 
+    // console.log(channel[0])
+
     if(!channel?.length){
         throw new ApiError(404,"Channel does not exists");
     }
@@ -393,11 +397,12 @@ const getUserChannelProfile=asyncHandler(async(req,res)=>{
 })
 
 const getWatchHistory=asyncHandler(async(req,res)=>{
+    console.log(req.user)
     const user=await User.aggregate(
         [
             {
                 $match:{
-                    id:new mongoose.Types.ObjectId(req.user._id);
+                    id:new mongoose.Types.ObjectId(req.user?._id)
                 }
             },
             {
@@ -437,10 +442,12 @@ const getWatchHistory=asyncHandler(async(req,res)=>{
         ]
     )
 
+    
+
     return res
     .status(200)
     .json(
-        new ApiResponse(200,user[0].watchHistory,"Watch History fetched successfully")
+        new ApiResponse(200,user[0]?.watchHistory || [],"Watch History fetched successfully")
     )
 })
 export {
